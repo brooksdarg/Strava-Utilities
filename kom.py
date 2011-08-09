@@ -1,11 +1,15 @@
 #!/usr/bin/env python
 # Utility to track Strava.com KOMs.
+# Brooks Sizemore (brooks@darg.net)
 
+import datetime
+import getopt
 import json
+import os
 import re
 import urllib2
 
-MAX_KOM_PAGES = 5
+MAX_KOM_PAGES = 10
 
 class KOM(object):
   """Monitors KOMs on Strava."""
@@ -13,6 +17,7 @@ class KOM(object):
   def __init__(self):
     """Default Constructor."""
     self.koms = {}
+    self.old_koms = self._LoadFromFile('koms.json')
 
   def _FetchPage(self, page_num=1):
     """Fetches a page of KOM listings."""
@@ -66,14 +71,18 @@ class KOM(object):
 
   def Diff(self, filename):
     """Shows a diff of new/old KOMs."""
-    old_koms = self._LoadFromFile(filename)
-    old = set(old_koms.keys())
+    old = set(self.old_koms.keys())
     new = set(self.koms.keys())
     return [new - old, old - new]
 
   def GetSegmentName(self, segment_id):
     """Returns the name of the KOM segment."""
-    return self.koms[segment_id]
+    try:
+      segment_name = self.koms[segment_id]
+    except KeyError:
+      segment_name = self.old_koms[segment_id]
+
+    return segment_name
 
 
 def main():
@@ -81,13 +90,22 @@ def main():
   kom.RefreshKOMs()
   diff = kom.Diff('koms.json')
 
+  # KOMs gained
   for segment_id in diff[0]:
     print '+ %s\t%s' % (segment_id, kom.GetSegmentName(segment_id))
 
+  # KOMs lost
   for segment_id in diff[1]:
     print '- %s\t%s' % (segment_id, kom.GetSegmentName(segment_id))
 
-  kom._SaveToFile('koms.json')
+  # Calculate 'today'
+  now = datetime.datetime.now()
+  json_today = 'koms.json.%04d%02d%02d' % (now.year, now.month, now.day)
+
+  # Archive today's KOMs for a later diff
+  os.unlink('koms.json')
+  kom._SaveToFile(json_today)
+  os.symlink(json_today, 'koms.json')
 
 if __name__ == '__main__':
   main()
