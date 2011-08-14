@@ -7,6 +7,7 @@ import getopt
 import json
 import os
 import re
+import sys
 import urllib2
 
 MAX_KOM_PAGES = 10
@@ -14,16 +15,17 @@ MAX_KOM_PAGES = 10
 class KOM(object):
   """Monitors KOMs on Strava."""
 
-  def __init__(self):
+  def __init__(self, athlete_id):
     """Default Constructor."""
     self.koms = {}
     self.old_koms = self._LoadFromFile('koms.json')
+    self.athlete_id = athlete_id
 
   def _FetchPage(self, page_num=1):
     """Fetches a page of KOM listings."""
 
     # Construct the paginated URL
-    url = 'http://app.strava.com/athletes/6887/segments/leader?page=%d' % page_num
+    url = 'http://app.strava.com/athletes/%d/segments/leader?page=%d' % (self.athlete_id, page_num)
 
     f = urllib2.urlopen(url)
     html = f.read()
@@ -51,7 +53,16 @@ class KOM(object):
 
   def _LoadFromFile(self, filename):
     """Loads a list of serialized KOM segments from a file."""
-    f = open(filename, 'r')
+    f = None
+
+    # Attempt to open the state koms file.
+    try:
+      f = open(filename, 'r')
+    except IOError:
+      # Return an empty json data structure
+      return json.loads('{}')
+
+    # Load the koms, then return them as a json data structure.
     koms = json.load(f)
     f.close()
     return koms
@@ -84,9 +95,33 @@ class KOM(object):
 
     return segment_name
 
+def usage():
+  """Describes usage of the KOM monitor."""
+  print 'Usage: kom.py --athlete_id=<id>'
 
-def main():
-  kom = KOM()
+def main(argv):
+  """Main entry point."""
+
+  # Defaults
+  athlete_id = 0
+  opts = []
+  args = []
+
+  try:
+    opts, args = getopt.getopt(argv, 'a:', ['athlete_id='])
+  except getopt.GetoptError:
+    usage()
+    sys.exit(2)
+
+  for opt, arg in opts:
+    if opt in ('-a', '--athlete_id'):
+      athlete_id = int(arg)
+
+  if athlete_id == 0:
+    usage()
+    sys.exit(2)
+
+  kom = KOM(athlete_id)
   kom.RefreshKOMs()
   diff = kom.Diff('koms.json')
 
@@ -108,4 +143,4 @@ def main():
   os.symlink(json_today, 'koms.json')
 
 if __name__ == '__main__':
-  main()
+  main(sys.argv[1:])
