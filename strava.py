@@ -30,16 +30,19 @@ class StravaObject(object):
     """Fetches a JSON object from Strava with caching."""
     
     # Check memcache first
-    obj_str = self._mc.get(key)
+    if self._mc:
+      obj_str = self._mc.get(key)
+      if obj_str:
+        return json.loads(obj_str)
 
-    if obj_str:
-      return json.loads(obj_str)
-    else:
-      f = urllib2.urlopen(url)
-      json_str = f.read()
-      f.close()
+    f = urllib2.urlopen(url)
+    json_str = f.read()
+    f.close()
+
+    if self._mc:
       self._mc.set(key, json_str)
-      return json.loads(json_str)
+
+    return json.loads(json_str)
 
   @classmethod
   def convert_seconds(self, seconds):
