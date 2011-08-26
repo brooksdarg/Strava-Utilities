@@ -26,11 +26,11 @@ class StravaObject(object):
     """Returns the name of the object."""
     return self._name
   
-  def FetchJson(self, key, url):
+  def FetchJson(self, url, key=None):
     """Fetches a JSON object from Strava with caching."""
     
     # Check memcache first
-    if self._mc:
+    if self._mc and key:
       obj_str = self._mc.get(key)
       if obj_str:
         return json.loads(obj_str)
@@ -39,7 +39,7 @@ class StravaObject(object):
     json_str = f.read()
     f.close()
 
-    if self._mc:
+    if self._mc and key:
       self._mc.set(key, json_str)
 
     return json.loads(json_str)
@@ -64,7 +64,7 @@ class Segment(StravaObject):
 
   def Refresh(self):
     """Refreshes the object from Strava data."""
-    segment_json = self.FetchJson(self._mc_key, self._url)['segment']
+    segment_json = self.FetchJson(self._url, key=self._mc_key)['segment']
     self._id = segment_json[u'id']
     self._name = segment_json[u'name']
 
@@ -72,7 +72,7 @@ class Segment(StravaObject):
     """Fetches the best efforts for a segment."""
     efforts_url = '%s/segments/%d/efforts?best=true' % (self._api_base, int(self._id))
     mc_key = '/segment/%d/efforts' % int(self._id)
-    efforts_json = self.FetchJson(mc_key, efforts_url)
+    efforts_json = self.FetchJson(efforts_url, key=mc_key)
 
     efforts = []
     rank = 1
@@ -136,13 +136,31 @@ class Ride(StravaObject):
     """Fetches a list of efforts for a ride."""
     efforts_url = '%s/rides/%d/efforts' % (self._api_base, int(self._id))
     mc_key = '/ride/%d/efforts' % int(self._id)
-    efforts_json = self.FetchJson(mc_key, efforts_url)
+    efforts_json = self.FetchJson(efforts_url, key=mc_key)
 
     efforts = []
     for effort in efforts_json[u'efforts']:
       segment = Segment(effort[u'segment'][u'id'], name=effort[u'segment'][u'name'])
       efforts.append(Effort(segment, effort[u'elapsed_time']))
     return efforts
+
+  def GetStream(self):
+    """Fetches the stream (coords over time) for a ride."""
+    stream_url = '%s/streams/%d' % (self._api_base, int(self._id))
+    mc_key = '/ride/%d/stream' % int(self._id)
+    stream_json = self.FetchJson(stream_url, key=mc_key)
+    return stream_json
+
+  def Refresh(self):
+    """Refreshes the object from Strava data."""
+    ride_url = '%s/rides/%d' % (self._api_base, self._id)
+    ride_key = '/ride/%d' % self._id
+    ride_json = self.FetchJson(ride_url, key=ride_key)[u'ride']
+    self._ride = ride_json
+
+  def Get(self, attr):
+    """Gets an attribute from the ride json."""
+    return self._ride[attr]
 
 
 class Athlete(StravaObject):
@@ -158,7 +176,7 @@ class Athlete(StravaObject):
     """Fetch a list of rides for the athlete."""
     rides_url = '%s/rides?athleteId=%d' % (self._api_base, int(self._id))
     mc_key = '/rides/%d' % int(self._id)
-    rides_json = self.FetchJson(mc_key, rides_url)
+    rides_json = self.FetchJson(rides_url, key=mc_key)
 
     rides = []
     for ride in rides_json[u'rides']:
