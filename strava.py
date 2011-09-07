@@ -30,6 +30,7 @@ class StravaObject(object):
     # Create a new request with gzip encoding enabled
     request = urllib2.Request(url)
     request.add_header('Accept-Encoding', 'gzip')
+    request.add_header('User-Agent', 'Strava-Utilities/0.1 (https://github.com/brooksdarg/Strava-Utilities)')
     response = urllib2.urlopen(request)
 
     # Check to be sure the response came back encoded
